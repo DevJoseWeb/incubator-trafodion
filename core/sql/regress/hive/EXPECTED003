@@ -123,6 +123,32 @@ P_PROMO_SK   P_PROMO_ID                 P_START_DATE_SK  P_END_DATE_SK  P_ITEM_S
 
 --- 20 row(s) selected.
 >>
+>>-- some negative tests
+>>insert into hive.ins_promotion (p_promo_sk, p_item_sk) select * from hive.promotion;
+
+*** ERROR[4223] Target column list for insert into Hive table not supported in this software version.
+
+*** ERROR[8822] The statement was not prepared.
+
+>>-- target column list is not supported
+>>
+>>insert into hive.ins_promotion select *, p_promo_sk from hive.promotion;
+
+*** ERROR[4023] The degree of each row value constructor (20) must equal the degree of the target table column list (19).
+
+*** ERROR[8822] The statement was not prepared.
+
+>>-- number of columns doesn't match
+>>
+>>prepare s from
++>insert into hive.ins_time_dim values ('a', 2, 3, 4, 5, 6, 'c', 'd', 'e', 'f');
+
+*** ERROR[4039] Column T_TIME_SK is of type INTEGER, incompatible with the value's type, CHAR(1).
+
+*** ERROR[8822] The statement was not prepared.
+
+>>-- wrong data types
+>>
 >>
 >>--try new HIVE SYNTAX
 >>--------------
@@ -523,12 +549,11 @@ T_TIME_SK    T_TIME_ID                  T_TIME       T_HOUR       T_MINUTE     T
 LC   RC   OP   OPERATOR              OPT       DESCRIPTION           CARD
 ---- ---- ---- --------------------  --------  --------------------  ---------
 
-7    .    8    root                                                  4.00E+000
-6    .    7    esp_exchange                    1:2(hash2)            4.00E+000
-4    .    6    hive_insert                     INS_STORE_SALES_SUMM  4.00E+000
-3    .    4    hash_partial_groupby                                  4.00E+000
-2    .    3    esp_exchange                    2(hash2):2(hash2)     4.00E+000
-1    .    2    hash_partial_groupby                                  4.00E+000
+6    .    7    root                                                  2.92E+006
+5    .    6    esp_exchange                    1:2(hash2)            2.92E+006
+3    .    5    hive_insert                     INS_STORE_SALES_SUMM  2.92E+006
+2    .    3    hash_groupby                                          2.92E+006
+1    .    2    esp_exchange                    2(hash2):2(hash2)     2.92E+006
 .    .    1    hive_scan                       STORE_SALES           2.92E+006
 
 --- SQL operation complete.
@@ -596,13 +621,12 @@ test lp bug # 1355477
 LC   RC   OP   OPERATOR              OPT       DESCRIPTION           CARD
 ---- ---- ---- --------------------  --------  --------------------  ---------
 
-9    .    10   root                                                  5.00E+000
-1    8    9    blocked_union                                         5.00E+000
-7    .    8    esp_exchange                    1:2(hash2)            4.00E+000
-5    .    7    hive_insert                     INS_STORE_SALES_SUMM  4.00E+000
-4    .    5    hash_partial_groupby                                  4.00E+000
-3    .    4    esp_exchange                    2(hash2):2(hash2)     4.00E+000
-2    .    3    hash_partial_groupby                                  4.00E+000
+8    .    9    root                                                  2.92E+006
+1    7    8    blocked_union                                         2.92E+006
+6    .    7    esp_exchange                    1:2(hash2)            2.92E+006
+4    .    6    hive_insert                     INS_STORE_SALES_SUMM  2.92E+006
+3    .    4    hash_groupby                                          2.92E+006
+2    .    3    esp_exchange                    2(hash2):2(hash2)     2.92E+006
 .    .    2    hive_scan                       STORE_SALES           2.92E+006
 .    .    1    hive_truncate                                         1.00E+000
 

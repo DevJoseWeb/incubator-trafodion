@@ -1,19 +1,22 @@
 /**********************************************************************
 // @@@ START COPYRIGHT @@@
 //
-// (C) Copyright 1998-2015 Hewlett-Packard Development Company, L.P.
+// Licensed to the Apache Software Foundation (ASF) under one
+// or more contributor license agreements.  See the NOTICE file
+// distributed with this work for additional information
+// regarding copyright ownership.  The ASF licenses this file
+// to you under the Apache License, Version 2.0 (the
+// "License"); you may not use this file except in compliance
+// with the License.  You may obtain a copy of the License at
 //
-//  Licensed under the Apache License, Version 2.0 (the "License");
-//  you may not use this file except in compliance with the License.
-//  You may obtain a copy of the License at
+//   http://www.apache.org/licenses/LICENSE-2.0
 //
-//      http://www.apache.org/licenses/LICENSE-2.0
-//
-//  Unless required by applicable law or agreed to in writing, software
-//  distributed under the License is distributed on an "AS IS" BASIS,
-//  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-//  See the License for the specific language governing permissions and
-//  limitations under the License.
+// Unless required by applicable law or agreed to in writing,
+// software distributed under the License is distributed on an
+// "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+// KIND, either express or implied.  See the License for the
+// specific language governing permissions and limitations
+// under the License.
 //
 // @@@ END COPYRIGHT @@@
 **********************************************************************/
@@ -2197,6 +2200,8 @@ ComTdbExeUtilLobExtract::ComTdbExeUtilLobExtract
  char * handle,
  Lng32 handleLen,
  ExtractToType toType,
+ Int64 bufAddr,
+ Int64 extractSizeAddr,
  Int64 intParam1,
  Int64 intParam2,
  Lng32 lobStorageType,
@@ -2228,28 +2233,24 @@ ComTdbExeUtilLobExtract::ComTdbExeUtilLobExtract
     handle_(handle),
     handleLen_(handleLen),
     toType_((short)toType),
+    bufAddr_(bufAddr),
+    extractSizeIOAddr_(extractSizeAddr),
     lobStorageType_(lobStorageType),
     stringParam1_(stringParam1),
     stringParam2_(stringParam2),
     stringParam3_(stringParam3),
     lobHdfsServer_(lobHdfsServer),
     lobHdfsPort_(lobHdfsPort),
-    rowSize_(0),
-    bufSize_(0),
+    totalBufSize_(0),
     flags_(0)
 {
   setNodeType(ComTdb::ex_LOB_EXTRACT);
-  if ((toType_ == ExtractToType::TO_BUFFER_) || (toType_ == ExtractToType::TO_STRING_))
-    {
-      // intparam1 contains the rowsize passed in via syntax
-      // intparam2 constains the total buf size user has allocated
-      rowSize_ = intParam1;
-      bufSize_ = intParam2;
-    }
-    else if (toType_ == ExtractToType::TO_FILE_)
+  if (toType_ == ExtractToType::TO_FILE_)
       {
-	// rowSize_ is irrelevant since the whole lob will be read into the output file
-	// bufSize_ is not passed in by user. It is a CQD value LOB_OUTPUT_SIZE
+	// extractSize_ is irrelevant since the whole lob will be read into the output file
+	// bufAddr_ is not passed in by user. It is a CQD value LOB_OUTPUT_SIZE
+	extractSizeIOAddr_ = 0;
+	bufAddr_ = 0;
 	
       }
 
@@ -2775,3 +2776,104 @@ void ComTdbExeUtilHBaseBulkUnLoad::displayContents(Space * space,ULng32 flag)
     }
 }
 
+ComTdbExeUtilRegionStats::ComTdbExeUtilRegionStats
+(
+     char * tableName,
+     ex_expr_base * input_expr,
+     ULng32 input_rowlen,
+     ex_cri_desc * work_cri_desc,
+     const unsigned short work_atp_index,
+     ex_cri_desc * given_cri_desc,
+     ex_cri_desc * returned_cri_desc,
+     queue_index down,
+     queue_index up,
+     Lng32 num_buffers,
+     ULng32 buffer_size)
+     : ComTdbExeUtil(ComTdbExeUtil::REGION_STATS_,
+		     NULL, 0, (Int16)SQLCHARSETCODE_UNKNOWN,
+		     tableName, strlen(tableName),
+		     input_expr, input_rowlen,
+		     NULL, 0,
+		     NULL,
+		     work_cri_desc, work_atp_index,
+		     given_cri_desc, returned_cri_desc,
+		     down, up, 
+		     num_buffers, buffer_size),
+       flags_(0)
+{
+  setNodeType(ComTdb::ex_REGION_STATS);
+}
+
+ComTdbExeUtilLobInfo::ComTdbExeUtilLobInfo
+(
+     char * tableName,
+      Int64 objectUID,
+     Lng32 numLOBs,
+     char *lobColArray,
+     char * lobNumArray,
+     char * lobLocArray,
+     Int32 hdfsPort,
+     char *hdfsServer,
+     NABoolean tableFormat,
+     ex_cri_desc * work_cri_desc,
+     const unsigned short work_atp_index,
+     ex_cri_desc * given_cri_desc,
+     ex_cri_desc * returned_cri_desc,
+     queue_index down,
+     queue_index up,
+     Lng32 num_buffers,
+     ULng32 buffer_size)
+     : ComTdbExeUtil(ComTdbExeUtil::LOB_INFO_,
+		     NULL, 0, (Int16)SQLCHARSETCODE_UNKNOWN,
+		     tableName, strlen(tableName),
+		     NULL, 0,
+		     NULL, 0,
+		     NULL,
+		     work_cri_desc, work_atp_index,
+		     given_cri_desc, returned_cri_desc,
+		     down, up, 
+		     num_buffers, buffer_size),
+       flags_(0),
+       objectUID_(objectUID),
+       numLOBs_(numLOBs),
+       lobColArray_(lobColArray),
+       lobNumArray_(lobNumArray),
+       lobLocArray_(lobLocArray),
+       hdfsPort_(0),
+       hdfsServer_(hdfsServer),
+       tableFormat_(tableFormat)
+{
+  setNodeType(ComTdb::ex_LOB_INFO);
+}
+
+Long ComTdbExeUtilLobInfo::pack(void * space)
+{
+  if (lobColArray_) 
+    lobColArray_.pack(space);
+
+ if (lobNumArray_) 
+    lobNumArray_.pack(space);
+
+ if (lobLocArray_) 
+    lobLocArray_.pack(space);
+
+ if (hdfsServer_) 
+    hdfsServer_.pack(space);
+  return ComTdbExeUtil::pack(space);
+}
+
+Lng32 ComTdbExeUtilLobInfo::unpack(void * base, void * reallocator)
+{
+  if (lobColArray_.unpack(base))
+    return -1;
+
+  if(lobNumArray_.unpack(base)) 
+    return -1;
+
+  if(lobLocArray_.unpack(base)) 
+    return -1;
+
+  if(hdfsServer_.unpack(base)) 
+    return -1;
+  return ComTdbExeUtil::unpack(base, reallocator);
+}

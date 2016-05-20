@@ -1,8 +1,6 @@
 
 # @@@ START COPYRIGHT @@@
 #
-# (C) Copyright 2007-2015 Hewlett-Packard Development Company, L.P.
-#
 #  Licensed under the Apache License, Version 2.0 (the "License");
 #  you may not use this file except in compliance with the License.
 #  You may obtain a copy of the License at
@@ -28,8 +26,17 @@ RELEASE_VER ?= 1.0.0_v002
 
 all: pkg-installer 
 
-pkg-installer: 
-	tar czf installer-$(RELEASE_VER).tar.gz installer
+pkg-installer: installer/LICENSE installer/NOTICE
+	tar czf installer-$(RELEASE_VER).tar.gz installer --exclude=tools
+
+installer/LICENSE: ../licenses/LICENSE-install
+	cp -f $? $@
+
+../licenses/LICENSE-install:
+	cd $(@D) && $(MAKE) $(@F)
+
+installer/NOTICE: ../NOTICE
+	cp -f $? $@
 
 version:
 	@echo "$(RELEASE_VER)"

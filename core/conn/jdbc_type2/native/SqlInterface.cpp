@@ -1,19 +1,22 @@
 /**************************************************************************
 // @@@ START COPYRIGHT @@@
 //
-// (C) Copyright 1998-2015 Hewlett-Packard Development Company, L.P.
+// Licensed to the Apache Software Foundation (ASF) under one
+// or more contributor license agreements.  See the NOTICE file
+// distributed with this work for additional information
+// regarding copyright ownership.  The ASF licenses this file
+// to you under the Apache License, Version 2.0 (the
+// "License"); you may not use this file except in compliance
+// with the License.  You may obtain a copy of the License at
 //
-//  Licensed under the Apache License, Version 2.0 (the "License");
-//  you may not use this file except in compliance with the License.
-//  You may obtain a copy of the License at
+//   http://www.apache.org/licenses/LICENSE-2.0
 //
-//      http://www.apache.org/licenses/LICENSE-2.0
-//
-//  Unless required by applicable law or agreed to in writing, software
-//  distributed under the License is distributed on an "AS IS" BASIS,
-//  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-//  See the License for the specific language governing permissions and
-//  limitations under the License.
+// Unless required by applicable law or agreed to in writing,
+// software distributed under the License is distributed on an
+// "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+// KIND, either express or implied.  See the License for the
+// specific language governing permissions and limitations
+// under the License.
 //
 // @@@ END COPYRIGHT @@@
 **************************************************************************/
@@ -260,8 +263,6 @@ SQLRETURN GetJDBCValues( SQLItemDesc_def *SQLItemDesc,
 		}
 		SQLItemDesc->signType      = FALSE;
 		SQLItemDesc->ODBCPrecision = SQLItemDesc->precision;
-		// Calculate the length based on YYYY/MM/DD HH:MM:SS.ffffff
-		SQLItemDesc->maxLen =  20 + 6;
 		getMemoryAllocInfo(	SQLItemDesc->dataType,
 			SQLItemDesc->SQLCharset,
 			SQLItemDesc->maxLen,
@@ -2569,12 +2570,9 @@ SQLRETURN ALLOCSQLMXHDLS_SPJRS(SRVR_STMT_HDL *pSrvrStmt, SQLSTMT_ID *callpStmt, 
 	if (pModule->module_name == NULL)
 	{
 		DEBUG_OUT(DEBUG_LEVEL_STMT,("***pModule->module_name == NULL  Call AllocStmtForRs()"));
-/* Commenting out for now - will be looked at when SPJ is supported
- #ifdef NSK_PLATFORM
 		CLI_AllocStmtForRS(callpStmt,
 			pSrvrStmt->RSIndex,
 			pStmt);
-#endif */
 		if (retcode < 0)
 		{
 			CLI_ClearDiagnostics(NULL);

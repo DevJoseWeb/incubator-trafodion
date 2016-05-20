@@ -1,18 +1,21 @@
 // @@@ START COPYRIGHT @@@
 //
-// (C) Copyright 2015 Hewlett-Packard Development Company, L.P.
+// Licensed to the Apache Software Foundation (ASF) under one
+// or more contributor license agreements.  See the NOTICE file
+// distributed with this work for additional information
+// regarding copyright ownership.  The ASF licenses this file
+// to you under the Apache License, Version 2.0 (the
+// "License"); you may not use this file except in compliance
+// with the License.  You may obtain a copy of the License at
 //
-//  Licensed under the Apache License, Version 2.0 (the "License");
-//  you may not use this file except in compliance with the License.
-//  You may obtain a copy of the License at
+//   http://www.apache.org/licenses/LICENSE-2.0
 //
-//      http://www.apache.org/licenses/LICENSE-2.0
-//
-//  Unless required by applicable law or agreed to in writing, software
-//  distributed under the License is distributed on an "AS IS" BASIS,
-//  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-//  See the License for the specific language governing permissions and
-//  limitations under the License.
+// Unless required by applicable law or agreed to in writing,
+// software distributed under the License is distributed on an
+// "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+// KIND, either express or implied.  See the License for the
+// specific language governing permissions and limitations
+// under the License.
 //
 // @@@ END COPYRIGHT @@@
 
@@ -1323,13 +1326,85 @@ public class TupleInfo extends TMUDRSerializableObject {
         case NUMERIC_UNSIGNED:
         case DECIMAL_UNSIGNED:
             long lval;
-            try {lval = Long.parseLong(val);}
-            catch (Exception e1) {
-                throw new UDRException(
-                                       38900,
-                                       "Error in setString() \"%s\" is not a long value",
-                                       val);
-            }
+            int scale = t.getScale();
+
+            if (scale == 0)
+                {
+                    try {lval = Long.parseLong(val);}
+                    catch (Exception e1) {
+                        throw new UDRException(
+                          38900,
+                          "Error in setString() \"%s\" is not a long value",
+                          val);
+                    }
+                }
+            else
+                {
+                    // setLong wants a long value that is scaled up by "scale"
+                    // e.g. 12.34 with a column of scale 3 would become 12340.
+                    boolean negate = false;
+                    String tval = val.trim();
+                    // scale of value read
+                    int vScale = 0;
+
+                    if (tval.charAt(0) == '-')
+                        {
+                            negate = true;
+                            tval = tval.substring(1,tval.length()).trim();
+                        }
+
+                    try {
+                        // position of decimal dot or decimal digit after the dot
+                        int ddPos = tval.indexOf('.');
+                        int len = tval.length();
+
+                        if (ddPos < 0)
+                            // no dot is the same as a trailing dot
+                            ddPos = len;
+
+                        if (ddPos > 0)
+                            // read the number before the (optional) decimal point
+                            lval = Long.parseLong(tval.substring(0, ddPos));
+                        else
+                            // the number starts with a dot
+                            lval = 0;
+
+                        // read any digits after the decimal point
+                        if (++ddPos < len)
+                            {
+                                long fraction = Long.parseLong(tval.substring(ddPos, len));
+                                vScale = (len - ddPos);
+
+                                for (int s=0; s<vScale; s++)
+                                    lval *= 10;
+
+                                lval += fraction;
+                            }
+
+                        if (negate)
+                            lval = -lval;
+
+                        // Now we got the value in lval with a scale of vScale.
+                        // Scale it up to "scale"
+                        while (vScale < scale)
+                            {
+                                lval *= 10;
+                                vScale++;
+                            }
+
+                    } catch (Exception e2) {
+                        throw new UDRException(
+                          38900,
+                          "Error in setString(): \"%s\" is not an in-range numeric value",
+                          val);
+                    }
+
+                    if (vScale > scale)
+                        throw new UDRException(
+                          38900,
+                          "Error in setString(): Scale of value %s exceeds that of the column, %d",
+                          val, scale);
+                }
             setLong(colNum, lval);
             break;
         

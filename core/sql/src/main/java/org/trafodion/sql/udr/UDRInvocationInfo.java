@@ -1,18 +1,21 @@
 // @@@ START COPYRIGHT @@@
 //
-// (C) Copyright 2015 Hewlett-Packard Development Company, L.P.
+// Licensed to the Apache Software Foundation (ASF) under one
+// or more contributor license agreements.  See the NOTICE file
+// distributed with this work for additional information
+// regarding copyright ownership.  The ASF licenses this file
+// to you under the Apache License, Version 2.0 (the
+// "License"); you may not use this file except in compliance
+// with the License.  You may obtain a copy of the License at
 //
-//  Licensed under the Apache License, Version 2.0 (the "License");
-//  you may not use this file except in compliance with the License.
-//  You may obtain a copy of the License at
+//   http://www.apache.org/licenses/LICENSE-2.0
 //
-//      http://www.apache.org/licenses/LICENSE-2.0
-//
-//  Unless required by applicable law or agreed to in writing, software
-//  distributed under the License is distributed on an "AS IS" BASIS,
-//  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-//  See the License for the specific language governing permissions and
-//  limitations under the License.
+// Unless required by applicable law or agreed to in writing,
+// software distributed under the License is distributed on an
+// "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+// KIND, either express or implied.  See the License for the
+// specific language governing permissions and limitations
+// under the License.
 //
 // @@@ END COPYRIGHT @@@
 
@@ -48,15 +51,17 @@ public class UDRInvocationInfo extends TMUDRSerializableObject
          *  carry any state between rows it reads from its
          *  table-valued inputs. It produces zero or more output
          *  rows per input row. Because no state is kept between
-         *  rows, the Trafodion compiler can automatically push
-         *  predicates down to the table-valued inputs. */
+         *  rows, the Trafodion compiler can automatically
+         *  parallelize execution and push predicates down to
+         *  the table-valued inputs. */
         MAPPER,  
         /**  A reducer requires the data to be partitioned on
          * a set of columns. The UDF does not carry any state
          * between groups of rows with the same partition column
          * values, but it may carry state within such groups.
-         * This allows the compiler to push predicates on the
-         * partitioning column(s) down to table-valued inputs. */
+         * This allows the compiler to parallelize execution and
+         * to push predicates on the partitioning column(s) down
+         * to table-valued inputs. */
         REDUCER;
 
         private static FuncType[] allValues = values();
@@ -947,12 +952,7 @@ public class UDRInvocationInfo extends TMUDRSerializableObject
                           CallPhase.COMPILER_PLAN_CALL,
                           "UDRInvocationInfo::setUDRWriterCompileTimeData()");
         
-        // for now we can't allow this
-        throw new UDRException(
-                               38912,
-                               "UDRInvocationInfo::setUDRWriterCompileTimeData() not yet supported");
-
-        // udrWriterCompileTimeData_ = compileTimeData;
+        udrWriterCompileTimeData_ = compileTimeData;
     }
 
     /**

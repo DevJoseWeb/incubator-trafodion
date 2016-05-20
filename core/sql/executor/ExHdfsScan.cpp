@@ -1,19 +1,22 @@
 // **********************************************************************
 // @@@ START COPYRIGHT @@@
 //
-// (C) Copyright 2013-2015 Hewlett-Packard Development Company, L.P.
+// Licensed to the Apache Software Foundation (ASF) under one
+// or more contributor license agreements.  See the NOTICE file
+// distributed with this work for additional information
+// regarding copyright ownership.  The ASF licenses this file
+// to you under the Apache License, Version 2.0 (the
+// "License"); you may not use this file except in compliance
+// with the License.  You may obtain a copy of the License at
 //
-//  Licensed under the Apache License, Version 2.0 (the "License");
-//  you may not use this file except in compliance with the License.
-//  You may obtain a copy of the License at
+//   http://www.apache.org/licenses/LICENSE-2.0
 //
-//      http://www.apache.org/licenses/LICENSE-2.0
-//
-//  Unless required by applicable law or agreed to in writing, software
-//  distributed under the License is distributed on an "AS IS" BASIS,
-//  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-//  See the License for the specific language governing permissions and
-//  limitations under the License.
+// Unless required by applicable law or agreed to in writing,
+// software distributed under the License is distributed on an
+// "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+// KIND, either express or implied.  See the License for the
+// specific language governing permissions and limitations
+// under the License.
 //
 // @@@ END COPYRIGHT @@@
 // **********************************************************************
@@ -41,6 +44,7 @@
 //#include "hdfs.h"
 
 #include "ExpORCinterface.h"
+
 
 ex_tcb * ExHdfsScanTdb::build(ex_globals * glob)
 {
@@ -110,6 +114,7 @@ ExHdfsScanTcb::ExHdfsScanTcb(
   , hdfo_(NULL)
   , numBytesProcessedInRange_(0)
   , exception_(FALSE)
+  , checkRangeDelimiter_(FALSE)
 {
   Space * space = (glob ? glob->getSpace() : 0);
   CollHeap * heap = (glob ? glob->getDefaultHeap() : 0);
@@ -362,7 +367,8 @@ ExWorkProcRetcode ExHdfsScanTcb::work()
   char cursorId[8];
   HdfsFileInfo *hdfo = NULL;
   Lng32 openType = 0;
-  
+  int changedLen = 0;
+
   while (!qparent_.down->isEmpty())
     {
       ex_queue_entry *pentry_down = qparent_.down->getHeadEntry();
@@ -384,6 +390,7 @@ ExWorkProcRetcode ExHdfsScanTcb::work()
 	    beginRangeNum_ = -1;
 	    numRanges_ = -1;
 	    hdfsOffset_ = 0;
+            checkRangeDelimiter_ = FALSE;
 
 	    if (hdfsScanTdb().getHdfsFileInfoList()->isEmpty())
 	      {
@@ -492,7 +499,7 @@ ExWorkProcRetcode ExHdfsScanTcb::work()
                    bytesLeft_, // max bytes
                    cursorId_, 
 		       
-                   requestTag_, 
+                   requestTag_, Lob_Memory,
                    0, // not check status
                    (NOT hdfsScanTdb().hdfsPrefetch()),  //1, // waited op
 		       
@@ -525,7 +532,7 @@ ExWorkProcRetcode ExHdfsScanTcb::work()
                        hdfo->getBytesToRead(), // max bytes
                        cursorId, 
                            
-                       requestTag_, 
+                       requestTag_, Lob_Memory,
                        0, // not check status
                        (NOT hdfsScanTdb().hdfsPrefetch()),  //1, // waited op
                            
@@ -592,7 +599,7 @@ ExWorkProcRetcode ExHdfsScanTcb::work()
                      "too many bites.");
 
             if (hdfsStats_)
-	      hdfsStats_->getTimer().start();
+	      hdfsStats_->getHdfsTimer().start();
 
 	    retcode = 0;
 	    
@@ -631,7 +638,7 @@ ExWorkProcRetcode ExHdfsScanTcb::work()
                    0, NULL,		       
                    0, cursorId_,
 		       
-                   requestTag_, 
+                   requestTag_, Lob_Memory,
                    0, // not check status
                    (NOT hdfsScanTdb().hdfsPrefetch()),  //1, // waited op
 		       
@@ -644,7 +651,7 @@ ExWorkProcRetcode ExHdfsScanTcb::work()
                    );
                   
                 if (hdfsStats_)
-                  hdfsStats_->incMaxHdfsIOTime(hdfsStats_->getTimer().stop());
+                  hdfsStats_->incMaxHdfsIOTime(hdfsStats_->getHdfsTimer().stop());
 	          
 	        if (retcode < 0)
 	          {
@@ -713,8 +720,8 @@ ExWorkProcRetcode ExHdfsScanTcb::work()
 	      {
 		// Position in the hdfsScanBuffer_ to the
 		// first record delimiter.  
-		hdfsBufNextRow_ = strchr(hdfsScanBuffer_,
-                                         hdfsScanTdb().recordDelimiter_);
+		hdfsBufNextRow_ = hdfs_strchr(hdfsScanBuffer_,
+                                         hdfsScanTdb().recordDelimiter_, hdfsScanBuffer_+trailingPrevRead_+ bytesRead_, checkRangeDelimiter_, hdfsScanTdb().getHiveScanMode(), &changedLen);
 		// May be that the record is too long? Or data isn't ascii?
 		// Or delimiter is incorrect.
 		if (! hdfsBufNextRow_)
@@ -733,7 +740,8 @@ ExWorkProcRetcode ExHdfsScanTcb::work()
 		    break;
 		  }
 		
-		hdfsBufNextRow_ += 1;   // point past record delimiter.
+		hdfsBufNextRow_ += 1 + changedLen;   // point past record delimiter.
+		//add changedLen since hdfs_strchr will remove the pointer ahead to remove the \r
 	      }
 	    else
 	      hdfsBufNextRow_ = hdfsScanBuffer_;
@@ -762,7 +770,7 @@ ExWorkProcRetcode ExHdfsScanTcb::work()
 	  ComDiagsArea *transformDiags = NULL;
 	  int err = 0;
 	  char *startOfNextRow =
-	      extractAndTransformAsciiSourceToSqlRow(err, transformDiags);
+	      extractAndTransformAsciiSourceToSqlRow(err, transformDiags, hdfsScanTdb().getHiveScanMode());
 
 	  bool rowWillBeSelected = true;
 	  lastErrorCnd_ = NULL;
@@ -1098,8 +1106,9 @@ ExWorkProcRetcode ExHdfsScanTcb::work()
               // extractSourceFields method to keep from processing
               // bytes left in the buffer from the previous read.
               if ((trailingPrevRead_ > 0)  && 
-                  (hdfsBufNextRow_[0] == '\0'))
+                  (hdfsBufNextRow_[0] == RANGE_DELIMITER))
               {
+                 checkRangeDelimiter_ = FALSE;
                  step_ = CLOSE_HDFS_CURSOR;
                  break;
               }  
@@ -1108,7 +1117,10 @@ ExWorkProcRetcode ExHdfsScanTcb::work()
               step_ = GET_HDFS_DATA;
             }            
             else
+            {
+              trailingPrevRead_ = 0;
               step_ = CLOSE_HDFS_CURSOR;
+            }
 	    break;
 	  }
 	case CLOSE_HDFS_CURSOR:
@@ -1139,7 +1151,7 @@ ExWorkProcRetcode ExHdfsScanTcb::work()
                    0,NULL, //handle not relevant for non lob access
                    0, cursorId_,
 		       
-                   requestTag_, 
+                   requestTag_, Lob_Memory,
                    0, // not check status
                    (NOT hdfsScanTdb().hdfsPrefetch()),  //1, // waited op
 		       
@@ -1368,49 +1380,45 @@ ExWorkProcRetcode ExHdfsScanTcb::work()
 }
 
 char * ExHdfsScanTcb::extractAndTransformAsciiSourceToSqlRow(int &err,
-							     ComDiagsArea* &diagsArea)
+							     ComDiagsArea* &diagsArea, int mode)
 {
   err = 0;
-
   char *sourceData = hdfsBufNextRow_;
-  char *sourceDataEnd = strchr(sourceData, 
-                               hdfsScanTdb().recordDelimiter_);
-  hdfsLoggingRowEnd_  = sourceDataEnd;
-  hdfsLoggingRow_ = hdfsBufNextRow_;
+  char *sourceRowEnd = NULL; 
   char *sourceColEnd = NULL;
-
-  if (!sourceDataEnd)
-  {
-    return NULL; 
-
-  }
-  else if (sourceDataEnd >= 
-      (hdfsScanBuffer_ + trailingPrevRead_ + bytesRead_))
-  {
-    return NULL; 
-  }
-
+  int changedLen = 0;
   NABoolean isTrailingMissingColumn = FALSE;
-  if ((endOfRequestedRange_) && 
-      (sourceDataEnd >= endOfRequestedRange_))
-    *(sourceDataEnd +1)= '\0';
-
   ExpTupleDesc * asciiSourceTD =
      hdfsScanTdb().workCriDesc_->getTupleDescriptor(hdfsScanTdb().asciiTuppIndex_);
+
+  const char cd = hdfsScanTdb().columnDelimiter_;
+  const char rd = hdfsScanTdb().recordDelimiter_;
+  const char *sourceDataEnd = hdfsScanBuffer_+trailingPrevRead_+ bytesRead_;
+
+  hdfsLoggingRow_ = hdfsBufNextRow_;
   if (asciiSourceTD->numAttrs() == 0)
   {
-    // no columns need to be converted. For e.g. count(*) with no predicate
-    return sourceDataEnd+1;
-  }
+     sourceRowEnd = hdfs_strchr(sourceData, rd, sourceDataEnd, checkRangeDelimiter_, mode, &changedLen);
+     hdfsLoggingRowEnd_  = sourceRowEnd + changedLen;
 
-  const char delimiter = hdfsScanTdb().columnDelimiter_;
+     if (!sourceRowEnd)
+       return NULL; 
+     if ((endOfRequestedRange_) && 
+            (sourceRowEnd >= endOfRequestedRange_)) {
+        checkRangeDelimiter_ = TRUE;
+        *(sourceRowEnd +1)= RANGE_DELIMITER;
+     }
+
+    // no columns need to be converted. For e.g. count(*) with no predicate
+    return sourceRowEnd+1;
+  }
 
   Lng32 neededColIndex = 0;
   Attributes * attr = NULL;
+  NABoolean rdSeen = FALSE;
 
   for (Lng32 i = 0; i <  hdfsScanTdb().convertSkipListSize_; i++)
     {
-      // we have scanned for all needed columns from this row
       // all remainin columns wil be skip columns, don't bother
       // finding their column delimiters
       if (neededColIndex == asciiSourceTD->numAttrs())
@@ -1424,25 +1432,37 @@ char * ExHdfsScanTcb::extractAndTransformAsciiSourceToSqlRow(int &err,
       else
         attr = NULL;
  
-      if (!isTrailingMissingColumn)
-        sourceColEnd = strchr(sourceData, delimiter);
-
-      if(!isTrailingMissingColumn)
-	{
-          short len = 0;
-	  if (sourceColEnd  &&
-	      sourceColEnd <= sourceDataEnd)
-	    len = sourceColEnd - sourceData;
-	  else
-            { 
-              len = sourceDataEnd - sourceData;
-              if (i != hdfsScanTdb().convertSkipListSize_ - 1)
-                isTrailingMissingColumn = TRUE;
+      if (!isTrailingMissingColumn) {
+         sourceColEnd = hdfs_strchr(sourceData, rd, cd, sourceDataEnd, checkRangeDelimiter_, &rdSeen,mode, &changedLen);
+         if (sourceColEnd == NULL) {
+            if (rdSeen || (sourceRowEnd == NULL))
+               return NULL;
+            else
+               return sourceRowEnd+1;
+         }
+         Int32 len = 0;
+	 len = (Int64)sourceColEnd - (Int64)sourceData;
+         if (rdSeen) {
+            sourceRowEnd = sourceColEnd + changedLen; 
+            hdfsLoggingRowEnd_  = sourceRowEnd;
+            if ((endOfRequestedRange_) && 
+                   (sourceRowEnd >= endOfRequestedRange_)) {
+               checkRangeDelimiter_ = TRUE;
+               *(sourceRowEnd +1)= RANGE_DELIMITER;
             }
+            if (i != hdfsScanTdb().convertSkipListSize_ - 1)
+               isTrailingMissingColumn = TRUE;
+         }
 
-          if (attr) // this is a needed column. We need to convert
-          {
-            *(short*)&hdfsAsciiSourceData_[attr->getVCLenIndOffset()] = len;
+         if (attr) // this is a needed column. We need to convert
+         {
+           if (attr->getVCIndicatorLength() == sizeof(short))
+             *(short*)&hdfsAsciiSourceData_[attr->getVCLenIndOffset()] 
+               = (short)len;
+           else
+             *(Int32*)&hdfsAsciiSourceData_[attr->getVCLenIndOffset()] 
+               = len;
+
             if (attr->getNullFlag())
             {
               if (len == 0)
@@ -1478,6 +1498,20 @@ char * ExHdfsScanTcb::extractAndTransformAsciiSourceToSqlRow(int &err,
 	}
       sourceData = sourceColEnd + 1 ;
     }
+  // It is possible that the above loop came out before
+  // rowDelimiter is encountered
+  // So try to find the record delimiter
+  if (sourceRowEnd == NULL) {
+     sourceRowEnd = hdfs_strchr(sourceData, rd, sourceDataEnd, checkRangeDelimiter_,mode, &changedLen);
+     if (sourceRowEnd) {
+        hdfsLoggingRowEnd_  = sourceRowEnd + changedLen; //changedLen is when hdfs_strchr move the return pointer to remove the extra \r
+        if ((endOfRequestedRange_) &&
+              (sourceRowEnd >= endOfRequestedRange_ )) {
+           checkRangeDelimiter_ = TRUE;
+          *(sourceRowEnd +1)= RANGE_DELIMITER;
+        }
+     }
+  }
 
   workAtp_->getTupp(hdfsScanTdb().workAtpIndex_) = hdfsSqlTupp_;
   workAtp_->getTupp(hdfsScanTdb().asciiTuppIndex_) = hdfsAsciiSourceTupp_;
@@ -1493,8 +1527,9 @@ char * ExHdfsScanTcb::extractAndTransformAsciiSourceToSqlRow(int &err,
     else
       err = 0;
   }
-
-  return sourceDataEnd+1;
+  if (sourceRowEnd)
+     return sourceRowEnd+1;
+  return NULL;
 }
 
 short ExHdfsScanTcb::moveRowToUpQueue(const char * row, Lng32 len, 

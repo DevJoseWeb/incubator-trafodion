@@ -1,18 +1,21 @@
 // @@@ START COPYRIGHT @@@
 //
-// (C) Copyright 2015 Hewlett-Packard Development Company, L.P.
+// Licensed to the Apache Software Foundation (ASF) under one
+// or more contributor license agreements.  See the NOTICE file
+// distributed with this work for additional information
+// regarding copyright ownership.  The ASF licenses this file
+// to you under the Apache License, Version 2.0 (the
+// "License"); you may not use this file except in compliance
+// with the License.  You may obtain a copy of the License at
 //
-//  Licensed under the Apache License, Version 2.0 (the "License");
-//  you may not use this file except in compliance with the License.
-//  You may obtain a copy of the License at
+//   http://www.apache.org/licenses/LICENSE-2.0
 //
-//      http://www.apache.org/licenses/LICENSE-2.0
-//
-//  Unless required by applicable law or agreed to in writing, software
-//  distributed under the License is distributed on an "AS IS" BASIS,
-//  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-//  See the License for the specific language governing permissions and
-//  limitations under the License.
+// Unless required by applicable law or agreed to in writing,
+// software distributed under the License is distributed on an
+// "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+// KIND, either express or implied.  See the License for the
+// specific language governing permissions and limitations
+// under the License.
 //
 // @@@ END COPYRIGHT @@@
 
@@ -331,6 +334,9 @@ public class TypeInfo extends TMUDRSerializableObject {
             // length is the length in characters, but length_ is
             // the byte length, multiply by min bytes per char
             length_ = length * minBytesPerChar();
+            if (length_ < 0)
+                throw new UDRException(38900,"Length of a character type must not be negative, got %d",
+                                       length_);
             if (collation_ == SQLCollationCode.UNDEFINED_COLLATION.ordinal())
                 throw new UDRException(38900,"Collation must be specified for CHAR type in TypeInfo::TypeInfo");
             break;
@@ -346,6 +352,9 @@ public class TypeInfo extends TMUDRSerializableObject {
             if (length_ > 32767)
                 // see also CharType::CharType in ../common/CharType.cpp
                 flags_ |= TYPE_FLAG_4_BYTE_VC_LEN;
+            if (length_ < 0)
+                throw new UDRException(38900,"Length of a varchar type must not be negative, got %d",
+                                       length_);
             break;
 
         case CLOB:
